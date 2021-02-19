@@ -12,6 +12,7 @@ use Ergonode\ExporterShopware6\Infrastructure\Connector\Action\PostAccessToken;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Ergonode\ExporterShopware6\Domain\Entity\Shopware6Channel;
 
@@ -19,13 +20,16 @@ class Shopware6Connector
 {
     private Configurator $configurator;
 
+    private LoggerInterface $logger;
+
     private ?string $token;
 
     private \DateTimeInterface $expiresAt;
 
-    public function __construct(Configurator $configurator)
+    public function __construct(Configurator $configurator, LoggerInterface $logger)
     {
         $this->configurator = $configurator;
+        $this->logger = $logger;
 
         $this->token = null;
         $this->expiresAt = new \DateTimeImmutable();
@@ -61,8 +65,27 @@ class Shopware6Connector
 
             $client = new Client($config);
 
+            $this->logger->debug(
+                $action->getRequest()->getMethod().' '.$action->getRequest()->getUri()->getPath(),
+                [
+                    'patch' => $action->getRequest()->getUri()->getPath(),
+                    'method' => $action->getRequest()->getMethod(),
+                    'headers' => $action->getRequest()->getHeaders(),
+                    'body' => $action->getRequest()->getBody()->getContents(),
+                    'query' => $action->getRequest()->getUri()->getQuery(),
+                ]
+            );
+
             $response = $client->send($action->getRequest());
             $contents = $this->resolveResponse($response);
+
+            $this->logger->debug(
+                'RESPONSE',
+                [
+                    'status' => $response->getStatusCode(),
+                    'body' => $contents,
+                ]
+            );
 
             return $action->parseContent($contents);
         } catch (GuzzleException $exception) {
